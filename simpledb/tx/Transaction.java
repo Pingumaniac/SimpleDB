@@ -6,6 +6,12 @@ import simpledb.buffer.*;
 import simpledb.tx.recovery.*;
 import simpledb.tx.concurrency.ConcurrencyMgr;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +31,7 @@ public class Transaction {
    private static List<Transaction> activeTransactions = new ArrayList<>();
    private static final Object checkpointLock = new Object();
    private static volatile boolean isCheckpointing = false;
+   private static final String TXNUM_STORAGE_FILE = "txnum.dat";
 
    public Transaction(FileMgr fm, LogMgr lm, BufferMgr bm) {
       this.fm = fm;
@@ -137,11 +144,6 @@ public class Transaction {
       return bm.available();
    }
 
-   private static synchronized int nextTxNumber() {
-      nextTxNum++;
-      return nextTxNum;
-   }
-
    public static void performQuiescentCheckpoint(LogMgr lm) {
       synchronized (checkpointLock) {
          isCheckpointing = true;
@@ -174,5 +176,30 @@ public class Transaction {
 
    private List<BlockId> getNewlyAppendedBlocks() {
       return new ArrayList<>(this.newlyAppendedBlocks);
+   }
+
+   private static synchronized int nextTxNumber() {
+      int lastTxNum = readLastTxNum();
+      nextTxNum = lastTxNum + 1;
+      saveLastTxNum(nextTxNum);
+      return nextTxNum;
+   }
+   private static void saveLastTxNum(int txNum) {
+      try (DataOutputStream dos = new DataOutputStream(new FileOutputStream(TXNUM_STORAGE_FILE))) {
+         dos.writeInt(txNum);
+      } catch (IOException e) {
+         throw new RuntimeException("Unable to save transaction number: " + e.getMessage(), e);
+      }
+   }
+   private static int readLastTxNum() {
+      File file = new File(TXNUM_STORAGE_FILE);
+      if (!file.exists()) {
+         return 0;
+      }
+      try (DataInputStream dis = new DataInputStream(new FileInputStream(file))) {
+         return dis.readInt();
+      } catch (IOException e) {
+         throw new RuntimeException("Unable to read transaction number: " + e.getMessage(), e);
+      }
    }
 }

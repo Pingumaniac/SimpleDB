@@ -24,7 +24,7 @@ public class LogMgr {
    private Page logpage;
    private int latestLSN = 0;
    private int lastSavedLSN = 0;
-   private FileMgr fm; // File manager for file operations
+   private FileMgr fm;
    private static final int CHECKPOINT = 0;
    private static final int AUDIT = 1;
    private static final int MODIFY = 2;
@@ -120,10 +120,12 @@ public class LogMgr {
       return new Iterator<byte[]>() {
          private BlockId currentBlk = new BlockId(logfile, 0);
          private int currentPos = Integer.BYTES;
+
          @Override
          public boolean hasNext() {
             return !isEndOfLog();
          }
+
          @Override
          public byte[] next() {
             if (!hasNext()) {
@@ -164,14 +166,14 @@ public class LogMgr {
    }
 
    public synchronized int writeCheckpointRecord(List<Integer> activeTxIds) {
-        ByteBuffer buffer = ByteBuffer.allocate(1024); // Example buffer size
-        buffer.putInt(CHECKPOINT);
-        buffer.putLong(new Date().getTime()); // Current timestamp
-        for (int txId : activeTxIds) {
-            buffer.putInt(txId);
-        }
-        byte[] record = buffer.array();
-        return append(record);
+      ByteBuffer buffer = ByteBuffer.allocate(1024); // Example buffer size
+      buffer.putInt(CHECKPOINT);
+      buffer.putLong(new Date().getTime()); // Current timestamp
+      for (int txId : activeTxIds) {
+         buffer.putInt(txId);
+      }
+      byte[] record = buffer.array();
+      return append(record);
    }
 
    public synchronized int writeAuditRecord(String ipAddress, int txId, BlockId blk, String operation) {
@@ -186,7 +188,8 @@ public class LogMgr {
       return append(record);
    }
 
-   public synchronized int writeModifyRecord(String ipAddress, int txId, BlockId blk, String oldValue, String newValue) {
+   public synchronized int writeModifyRecord(String ipAddress, int txId, BlockId blk, String oldValue,
+         String newValue) {
       ByteBuffer buffer = ByteBuffer.allocate(1024); // Example buffer size
       buffer.putInt(MODIFY);
       buffer.putLong(new Date().getTime()); // Current timestamp
