@@ -2,51 +2,35 @@ package simpledb.log;
 
 import java.util.Iterator;
 import simpledb.file.*;
+import simpledb.buffer.Buffer;
+import simpledb.buffer.BufferMgr;
 
-/**
- * A class that provides the ability to move through the
- * records of the log file in reverse order.
- * 
- * @author Edward Sciore
- */
 class LogIterator implements Iterator<byte[]> {
-   private FileMgr fm;
+   private BufferMgr bufferMgr;
    private BlockId blk;
+   private Buffer buffer;
    private Page p;
    private int currentpos;
    private int boundary;
 
-   /**
-    * Creates an iterator for the records in the log file,
-    * positioned after the last log record.
-    */
-   public LogIterator(FileMgr fm, BlockId blk) {
-      this.fm = fm;
+   public LogIterator(BufferMgr bufferMgr, BlockId blk) {
+      this.bufferMgr = bufferMgr;
       this.blk = blk;
-      byte[] b = new byte[fm.blockSize()];
-      p = new Page(b);
+      buffer = bufferMgr.pin(blk);
+      p = buffer.contents();
       moveToBlock(blk);
    }
 
-   /**
-    * Determines if the current log record
-    * is the earliest record in the log file.
-    * @return true if there is an earlier record
-    */
    public boolean hasNext() {
-      return currentpos<fm.blockSize() || blk.number()>0;
+      return currentpos < p.contents().capacity() || blk.number() > 0;
    }
 
-   /**
-    * Moves to the next log record in the block.
-    * If there are no more log records in the block,
-    * then move to the previous block
-    * and return the log record from there.
-    * @return the next earliest log record
-    */
    public byte[] next() {
-      if (currentpos == fm.blockSize()) {
-         blk = new BlockId(blk.fileName(), blk.number()-1);
+      if (currentpos == p.contents().capacity()) {
+         bufferMgr.unpin(buffer);
+         blk = new BlockId(blk.fileName(), blk.number() - 1);
+         buffer = bufferMgr.pin(blk);
+         p = buffer.contents();
          moveToBlock(blk);
       }
       byte[] rec = p.getBytes(currentpos);
@@ -54,14 +38,13 @@ class LogIterator implements Iterator<byte[]> {
       return rec;
    }
 
-   /**
-    * Moves to the specified log block
-    * and positions it at the first record in that block
-    * (i.e., the most recent one).
-    */
    private void moveToBlock(BlockId blk) {
-      fm.read(blk, p);
       boundary = p.getInt(0);
       currentpos = boundary;
+   }
+
+   // Ensure to unpin the buffer when the iterator is no longer in use
+   protected void finalize() {
+      bufferMgr.unpin(buffer);
    }
 }

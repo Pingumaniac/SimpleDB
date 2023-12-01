@@ -4,7 +4,7 @@ import simpledb.file.*;
 import simpledb.log.LogMgr;
 
 /**
- * An individual buffer. A databuffer wraps a page 
+ * An individual buffer. A databuffer wraps a page
  * and stores information about its status,
  * such as the associated disk block,
  * the number of times the buffer has been pinned,
@@ -26,16 +26,11 @@ public class Buffer {
       this.lm = lm;
       contents = new Page(fm.blockSize());
    }
-   
+
    public Page contents() {
       return contents;
    }
 
-   /**
-    * Returns a reference to the disk block
-    * allocated to the buffer.
-    * @return a reference to a disk block
-    */
    public BlockId block() {
       return blk;
    }
@@ -46,36 +41,21 @@ public class Buffer {
          this.lsn = lsn;
    }
 
-   /**
-    * Return true if the buffer is currently pinned
-    * (that is, if it has a nonzero pin count).
-    * @return true if the buffer is pinned
-    */
    public boolean isPinned() {
       return pins > 0;
    }
-   
+
    public int modifyingTx() {
       return txnum;
    }
 
-   /**
-    * Reads the contents of the specified block into
-    * the contents of the buffer.
-    * If the buffer was dirty, then its previous contents
-    * are first written to disk.
-    * @param b a reference to the data block
-    */
    void assignToBlock(BlockId b) {
       flush();
       blk = b;
       fm.read(blk, contents);
       pins = 0;
    }
-   
-   /**
-    * Write the buffer to its disk block if it is dirty.
-    */
+
    void flush() {
       if (txnum >= 0) {
          lm.flush(lsn);
@@ -84,17 +64,16 @@ public class Buffer {
       }
    }
 
-   /**
-    * Increase the buffer's pin count.
-    */
    void pin() {
       pins++;
    }
 
-   /**
-    * Decrease the buffer's pin count.
-    */
    void unpin() {
       pins--;
+   }
+
+   // Added method to access the LSN of the buffer
+   public int getLSN() {
+      return lsn;
    }
 }
