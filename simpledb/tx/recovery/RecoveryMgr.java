@@ -8,7 +8,8 @@ import simpledb.tx.Transaction;
 import static simpledb.tx.recovery.LogRecord.*;
 
 /**
- * The recovery manager.  Each transaction has its own recovery manager.
+ * The recovery manager. Each transaction has its own recovery manager.
+ *
  * @author Edward Sciore
  */
 public class RecoveryMgr {
@@ -16,9 +17,11 @@ public class RecoveryMgr {
    private BufferMgr bm;
    private Transaction tx;
    private int txnum;
+   private Set<BlockId> modifiedBlocks; // For Programming Ex 5.45
 
    /**
     * Create a recovery manager for the specified transaction.
+    *
     * @param txnum the ID of the specified transaction
     */
    public RecoveryMgr(Transaction tx, int txnum, LogMgr lm, BufferMgr bm) {
@@ -26,6 +29,7 @@ public class RecoveryMgr {
       this.txnum = txnum;
       this.lm = lm;
       this.bm = bm;
+      this.modifiedBlocks = new HashSet<>(); // For Programming Ex 5.45
       StartRecord.writeToLog(lm, txnum);
    }
 
@@ -57,11 +61,13 @@ public class RecoveryMgr {
       bm.flushAll(txnum);
       int lsn = CheckpointRecord.writeToLog(lm);
       lm.flush(lsn);
+      String archiveDir = "path/to/archive";
    }
 
    /**
     * Write a setint record to the log and return its lsn.
-    * @param buff the buffer containing the page
+    *
+    * @param buff   the buffer containing the page
     * @param offset the offset of the value in the page
     * @param newval the value to be written
     */
@@ -73,7 +79,8 @@ public class RecoveryMgr {
 
    /**
     * Write a setstring record to the log and return its lsn.
-    * @param buff the buffer containing the page
+    *
+    * @param buff   the buffer containing the page
     * @param offset the offset of the value in the page
     * @param newval the value to be written
     */
@@ -85,7 +92,7 @@ public class RecoveryMgr {
 
    /**
     * Rollback the transaction, by iterating
-    * through the log records until it finds 
+    * through the log records until it finds
     * the transaction's START record,
     * calling undo() for each of the transaction's
     * log records.
@@ -94,7 +101,7 @@ public class RecoveryMgr {
       Iterator<byte[]> iter = lm.iterator();
       while (iter.hasNext()) {
          byte[] bytes = iter.next();
-         LogRecord rec = LogRecord.createLogRecord(bytes); 
+         LogRecord rec = LogRecord.createLogRecord(bytes);
          if (rec.txNumber() == txnum) {
             if (rec.op() == START)
                return;
@@ -111,7 +118,7 @@ public class RecoveryMgr {
     * The method stops when it encounters a CHECKPOINT record
     * or the end of the log.
     */
-   private void doRecover() {
+    private void doRecover() {
       Collection<Integer> finishedTxs = new ArrayList<>();
       Iterator<byte[]> iter = lm.iterator();
       while (iter.hasNext()) {
@@ -122,7 +129,36 @@ public class RecoveryMgr {
          if (rec.op() == COMMIT || rec.op() == ROLLBACK)
             finishedTxs.add(rec.txNumber());
          else if (!finishedTxs.contains(rec.txNumber()))
-            rec.undo(tx);
+            rec.undo(tx); // Undo only if the transaction is not finished
       }
+   }
+
+   public void saveBlockCopy(BlockId blk, FileMgr fm) {
+      // Create a Page to read the original block
+      Page currentPage = new Page(fm.blockSize());
+      fm.read(blk, currentPage);
+      // Create a backup block id and a new Page for the backup
+      BlockId backupBlk = new BlockId("backup_" + blk.fileName(), blk.number());
+      Page backupPage = new Page(fm.blockSize());
+      // Copy contents to the backup page
+      byte[] data = currentPage.contents().array();
+      backupPage.contents().put(data);
+      // Write the backup page to the backup block
+      fm.write(backupBlk, backupPage);
+   }
+
+   public void restoreBlockCopy(BlockId blk, FileMgr fm) {
+      // Identify the backup block
+      BlockId backupBlk = new BlockId("backup_" + blk.fileName(), blk.number());
+      // Create a Page to read the backup block
+      Page backupPage = new Page(fm.blockSize());
+      fm.read(backupBlk, backupPage);
+      // Create a new Page for the original block
+      Page originalPage = new Page(fm.blockSize());
+      // Copy contents from the backup page to the original page
+      byte[] data = backupPage.contents().array();
+      originalPage.contents().put(data);
+      // Write the original page back to the original block
+      fm.write(blk, originalPage);
    }
 }

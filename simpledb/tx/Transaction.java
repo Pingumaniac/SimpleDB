@@ -2,6 +2,10 @@ package simpledb.tx;
 
 import simpledb.file.*;
 import simpledb.log.LogMgr;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import simpledb.buffer.*;
 import simpledb.tx.recovery.*;
 import simpledb.tx.concurrency.ConcurrencyMgr;
@@ -21,16 +25,20 @@ public class Transaction {
    private FileMgr fm;
    private int txnum;
    private BufferList mybuffers;
-   
+
+   // Additional fields and methods for Programming Ex 5.46 and 5.47
+   private static List<Transaction> activeTransactions = new ArrayList<>();
+   private static final Object checkpointLock = new Object();
+
    /**
-    * Create a new transaction and its associated 
+    * Create a new transaction and its associated
     * recovery and concurrency managers.
     * This constructor depends on the file, log, and buffer
     * managers that it gets from the class
     * {@link simpledb.server.SimpleDB}.
     * Those objects are created during system initialization.
     * Thus this constructor cannot be called until either
-    * {@link simpledb.server.SimpleDB#init(String)} or 
+    * {@link simpledb.server.SimpleDB#init(String)} or
     * {@link simpledb.server.SimpleDB#initFileLogAndBufferMgr(String)} or
     * is called first.
     */
@@ -42,7 +50,7 @@ public class Transaction {
       concurMgr   = new ConcurrencyMgr();
       mybuffers = new BufferList(bm);
    }
-   
+
    /**
     * Commit the current transaction.
     * Flush all modified buffers (and their log records),
@@ -55,7 +63,7 @@ public class Transaction {
       concurMgr.release();
       mybuffers.unpinAll();
    }
-   
+
    /**
     * Rollback the current transaction.
     * Undo any modified values,
@@ -69,11 +77,11 @@ public class Transaction {
       concurMgr.release();
       mybuffers.unpinAll();
    }
-   
+
    /**
     * Flush all modified buffers.
     * Then go through the log, rolling back all
-    * uncommitted transactions.  Finally, 
+    * uncommitted transactions.  Finally,
     * write a quiescent checkpoint record to the log.
     * This method is called during system startup,
     * before user transactions begin.
@@ -82,16 +90,18 @@ public class Transaction {
       bm.flushAll(txnum);
       recoveryMgr.recover();
    }
-   
+
    /**
     * Pin the specified block.
     * The transaction manages the buffer for the client.
     * @param blk a reference to the disk block
     */
    public void pin(BlockId blk) {
+      concurMgr.sLock(blk); // Acquire slock on pinning
       mybuffers.pin(blk);
    }
-   
+
+
    /**
     * Unpin the specified block.
     * The transaction looks up the buffer pinned to this block,
@@ -101,7 +111,7 @@ public class Transaction {
    public void unpin(BlockId blk) {
       mybuffers.unpin(blk);
    }
-   
+
    /**
     * Return the integer value stored at the
     * specified offset of the specified block.
@@ -116,7 +126,7 @@ public class Transaction {
       Buffer buff = mybuffers.getBuffer(blk);
       return buff.contents().getInt(offset);
    }
-   
+
    /**
     * Return the string value stored at the
     * specified offset of the specified block.
@@ -131,16 +141,16 @@ public class Transaction {
       Buffer buff = mybuffers.getBuffer(blk);
       return buff.contents().getString(offset);
    }
-   
+
    /**
-    * Store an integer at the specified offset 
+    * Store an integer at the specified offset
     * of the specified block.
     * The method first obtains an XLock on the block.
     * It then reads the current value at that offset,
-    * puts it into an update log record, and 
+    * puts it into an update log record, and
     * writes that record to the log.
     * Finally, it calls the buffer to store the value,
-    * passing in the LSN of the log record and the transaction's id. 
+    * passing in the LSN of the log record and the transaction's id.
     * @param blk a reference to the disk block
     * @param offset a byte offset within that block
     * @param val the value to be stored
@@ -155,16 +165,16 @@ public class Transaction {
       p.setInt(offset, val);
       buff.setModified(txnum, lsn);
    }
-   
+
    /**
-    * Store a string at the specified offset 
+    * Store a string at the specified offset
     * of the specified block.
     * The method first obtains an XLock on the block.
     * It then reads the current value at that offset,
-    * puts it into an update log record, and 
+    * puts it into an update log record, and
     * writes that record to the log.
     * Finally, it calls the buffer to store the value,
-    * passing in the LSN of the log record and the transaction's id. 
+    * passing in the LSN of the log record and the transaction's id.
     * @param blk a reference to the disk block
     * @param offset a byte offset within that block
     * @param val the value to be stored
@@ -182,7 +192,7 @@ public class Transaction {
 
    /**
     * Return the number of blocks in the specified file.
-    * This method first obtains an SLock on the 
+    * This method first obtains an SLock on the
     * "end of the file", before asking the file manager
     * to return the file size.
     * @param filename the name of the file
@@ -193,7 +203,7 @@ public class Transaction {
       concurMgr.sLock(dummyblk);
       return fm.length(filename);
    }
-   
+
    /**
     * Append a new block to the end of the specified file
     * and returns a reference to it.
@@ -207,15 +217,15 @@ public class Transaction {
       concurMgr.xLock(dummyblk);
       return fm.append(filename);
    }
-   
+
    public int blockSize() {
       return fm.blockSize();
    }
-   
+
    public int availableBuffs() {
       return bm.available();
    }
-   
+
    private static synchronized int nextTxNumber() {
       nextTxNum++;
       return nextTxNum;

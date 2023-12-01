@@ -1,9 +1,14 @@
 package simpledb.log;
 
+import java.io.File;
+import java.io.IOException;
+import java.util.NoSuchElementException;
+
 import simpledb.buffer.Buffer;
 import simpledb.buffer.BufferMgr;
 import simpledb.file.*;
 
+import java.util.Iterator;
 /**
  * The log manager, which is responsible for
  * writing log records into a log file using a buffer manager.
@@ -82,5 +87,71 @@ public class LogMgr {
       logpage.setInt(0, fm.blockSize());
       bufferMgr.flush(currentBuffer);
       return blk;
+   }
+
+   public void archiveLog(String archiveDir) {
+      try {
+         File currentLogFile = new File(logfile);
+         File archiveFile = new File(archiveDir, currentLogFile.getName());
+         // Ensure the archive directory exists
+         archiveFile.getParentFile().mkdirs();
+         // Move the current log file to the archive directory
+         if (!currentLogFile.renameTo(archiveFile)) {
+            throw new IOException("Failed to move log file to archive.");
+         }
+         // Start a new log file
+         BlockId newblk = appendNewBlock();
+         currentBuffer = bufferMgr.pin(newblk);
+         logpage = currentBuffer.contents();
+      } catch (IOException e) {
+         throw new RuntimeException("Error archiving log file: " + e.getMessage(), e);
+      }
+   }
+
+   public Iterator<byte[]> iterator() {
+      return new Iterator<byte[]>() {
+         private BlockId currentBlk = new BlockId(logfile, 0);
+         private int currentPos = Integer.BYTES;
+         @Override
+         public boolean hasNext() {
+            return !isEndOfLog();
+         }
+         @Override
+         public byte[] next() {
+            if (!hasNext()) {
+               throw new NoSuchElementException();
+            }
+            // Read the next log record
+            Buffer buf = bufferMgr.pin(currentBlk);
+            Page p = buf.contents();
+            int recordSize = p.getInt(currentPos);
+            byte[] record = new byte[recordSize];
+            p.getBytes(currentPos + Integer.BYTES);
+            // Move to the next record
+            currentPos += Integer.BYTES + recordSize;
+            if (currentPos >= fm.blockSize()) {
+               // Move to the next block if the end of the current block is reached
+               bufferMgr.unpin(buf);
+               currentBlk = new BlockId(logfile, currentBlk.number() + 1);
+               currentPos = Integer.BYTES;
+            } else {
+               bufferMgr.unpin(buf);
+            }
+            return record;
+         }
+
+         private boolean isEndOfLog() {
+            // Check if the end of the log file is reached
+            // This could be based on the file size or a special marker in the log
+            if (currentBlk.number() >= bufferMgr.length(logfile)) {
+               return true;
+            }
+            Buffer buf = bufferMgr.pin(currentBlk);
+            Page p = buf.contents();
+            int boundary = p.getInt(0);
+            bufferMgr.unpin(buf);
+            return currentPos >= boundary;
+         }
+      };
    }
 }

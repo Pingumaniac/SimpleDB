@@ -11,8 +11,10 @@ public class BufferMgr {
    private Map<BlockId, Buffer> bufferPoolMap;
    private static final long MAX_TIME = 10000; // 10 seconds
    private Deque<Buffer> lruQueue; // For LRU strategy
+   private FileMgr fm; // File manager for file operations
 
    public BufferMgr(FileMgr fm, LogMgr lm, int numbuffs) {
+      this.fm = fm; // Initialize FileMgr
       bufferpool = new Buffer[numbuffs];
       numAvailable = numbuffs;
       bufferPoolMap = new HashMap<>();
@@ -109,5 +111,25 @@ public class BufferMgr {
    // Method to retrieve the LSN from Buffer
    private int getLSN(Buffer buff) {
       return buff.getLSN();
+   }
+
+   public synchronized int length(String filename) {
+      return fm.length(filename);
+   }
+
+   public synchronized Buffer append(String filename) {
+      BlockId blk = fm.append(filename); // Append a new block
+      Buffer buff = pin(blk); // Pin the new block in the buffer pool
+      if (buff == null) {
+         throw new BufferAbortException();
+      }
+      return buff;
+   }
+
+   public synchronized void flush(BlockId blk) {
+      Buffer buff = findExistingBuffer(blk);
+      if (buff != null) {
+         buff.flush();
+      }
    }
 }
