@@ -132,4 +132,8 @@ public class BufferMgr {
          buff.flush();
       }
    }
+
+   public FileMgr getFileMgr() {
+      return fm;
+   }
 }

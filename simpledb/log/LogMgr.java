@@ -2,6 +2,7 @@ package simpledb.log;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.NoSuchElementException;
 
 import simpledb.buffer.Buffer;
@@ -9,6 +10,9 @@ import simpledb.buffer.BufferMgr;
 import simpledb.file.*;
 
 import java.util.Iterator;
+import java.util.List;
+import java.util.Date;
+
 /**
  * The log manager, which is responsible for
  * writing log records into a log file using a buffer manager.
@@ -20,6 +24,10 @@ public class LogMgr {
    private Page logpage;
    private int latestLSN = 0;
    private int lastSavedLSN = 0;
+   private FileMgr fm; // File manager for file operations
+   private static final int CHECKPOINT = 0;
+   private static final int AUDIT = 1;
+   private static final int MODIFY = 2;
 
    /**
     * Creates the manager for the specified log file.
@@ -30,7 +38,7 @@ public class LogMgr {
    public LogMgr(BufferMgr bufferMgr, String logfile) {
       this.bufferMgr = bufferMgr;
       this.logfile = logfile;
-
+      this.fm = bufferMgr.getFileMgr();
       int logsize = bufferMgr.length(logfile);
       BlockId blk = logsize == 0 ? appendNewBlock() : new BlockId(logfile, logsize - 1);
       currentBuffer = bufferMgr.pin(blk);
@@ -153,5 +161,47 @@ public class LogMgr {
             return currentPos >= boundary;
          }
       };
+   }
+
+   public synchronized int writeCheckpointRecord(List<Integer> activeTxIds) {
+        ByteBuffer buffer = ByteBuffer.allocate(1024); // Example buffer size
+        buffer.putInt(CHECKPOINT);
+        buffer.putLong(new Date().getTime()); // Current timestamp
+        for (int txId : activeTxIds) {
+            buffer.putInt(txId);
+        }
+        byte[] record = buffer.array();
+        return append(record);
+   }
+
+   public synchronized int writeAuditRecord(String ipAddress, int txId, BlockId blk, String operation) {
+      ByteBuffer buffer = ByteBuffer.allocate(1024); // Adjust size as needed
+      buffer.putInt(AUDIT);
+      buffer.putLong(new Date().getTime());
+      buffer.put(ipAddress.getBytes());
+      buffer.putInt(txId);
+      buffer.put(blk.toString().getBytes());
+      buffer.put(operation.getBytes());
+      byte[] record = buffer.array();
+      return append(record);
+   }
+
+   public synchronized int writeModifyRecord(String ipAddress, int txId, BlockId blk, String oldValue, String newValue) {
+      ByteBuffer buffer = ByteBuffer.allocate(1024); // Example buffer size
+      buffer.putInt(MODIFY);
+      buffer.putLong(new Date().getTime()); // Current timestamp
+      putString(buffer, ipAddress);
+      buffer.putInt(txId);
+      putString(buffer, blk.toString());
+      putString(buffer, oldValue);
+      putString(buffer, newValue);
+      byte[] record = buffer.array();
+      return append(record);
+   }
+
+   private void putString(ByteBuffer buffer, String str) {
+      byte[] strBytes = str.getBytes();
+      buffer.putInt(strBytes.length);
+      buffer.put(strBytes);
    }
 }
