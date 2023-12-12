@@ -4,20 +4,18 @@ import static java.sql.Types.INTEGER;
 import simpledb.file.*;
 import simpledb.tx.Transaction;
 
-/**
- * Store a record at a given location in a block. 
- * @author Edward Sciore
- */
 public class RecordPage {
    public static final int EMPTY = 0, USED = 1;
    private Transaction tx;
    private BlockId blk;
    private Layout layout;
+   private int currentslot;
 
    public RecordPage(Transaction tx, BlockId blk, Layout layout) {
       this.tx = tx;
       this.blk = blk;
       this.layout = layout;
+      this.currentslot = -1;
    }
 
    /**
@@ -97,11 +95,7 @@ public class RecordPage {
       setFlag(slot, EMPTY);
       tx.unpin(blk);  // Unpin the block at the end
    }
-   
-   /** Use the layout to format a new block of records.
-    *  These values should not be logged 
-    *  (because the old values are meaningless).
-    */ 
+
    public void format() {
       tx.pin(blk);  // Pin the block at the beginning
       int slot = 0;
@@ -141,10 +135,6 @@ public class RecordPage {
    }
    
    // Private auxiliary methods
-   
-   /**
-    * Set the record's empty/inuse flag.
-    */
    private void setFlag(int slot, int flag) {
       tx.setInt(blk, offset(slot), flag, true); 
    }
@@ -168,7 +158,7 @@ public class RecordPage {
    }
 
    public void afterLast() {
-      currentslot = numSlots;
+      currentslot = layout.slotSize();
    }
 
    public boolean previous() {
@@ -182,6 +172,39 @@ public class RecordPage {
       return false;
    }
 
+   public RID insertLargeRecord(byte[] recordData) {
+      int recordSize = recordData.length;
+      int currentOffset = 0;
+      RID firstPartRid = null;
+      RID lastPartRid = null;
+      while (recordSize > 0) {
+         int spaceInBlock = calculateSpaceInBlock();
+         int partSize = Math.min(spaceInBlock, recordSize);
+         RID partRid = insertRecordPart(Arrays.copyOfRange(recordData, currentOffset, currentOffset + partSize));
+         if (firstPartRid == null) firstPartRid = partRid;
+         lastPartRid = partRid;
+         currentOffset += partSize;
+         recordSize -= partSize;
+         if (recordSize > 0) {
+            moveToNextOrAllocateNewBlock();
+         }
+      }
+      setEndOfRecordPointer(lastPartRid);
+      return firstPartRid;
+   }
+
+   public void setNull(String fldname) {
+      int bitPosition = layout.bitLocation(fldname);
+      int flag = tx.getInt(blk, 0);
+      flag |= (1 << bitPosition);
+      tx.setInt(blk, 0, flag, true);
+   }
+
+   public boolean isNull(String fldname) {
+      int bitPosition = layout.bitLocation(fldname);
+      int flag = tx.getInt(blk, 0);
+      return (flag & (1 << bitPosition)) != 0;
+   }
 }
 
 

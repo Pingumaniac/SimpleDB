@@ -5,11 +5,6 @@ import simpledb.file.BlockId;
 import simpledb.query.*;
 import simpledb.tx.Transaction;
 
-/**
- * Provides the abstraction of an arbitrarily large array
- * of records.
- * @author sciore
- */
 public class TableScan implements UpdateScan {
    private Transaction tx;
    private Layout layout;
@@ -138,5 +133,13 @@ public class TableScan implements UpdateScan {
 
    private boolean atLastBlock() {
       return rp.block().number() == tx.size(filename) - 1;
+   }
+
+   public void setNull(String fldname) {
+      rp.setNull(fldname);
+   }
+
+   public boolean isNull(String fldname) {
+      return rp.isNull(fldname);
    }
 }
