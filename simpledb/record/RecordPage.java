@@ -84,12 +84,16 @@ public class RecordPage {
     * @param val the string value stored in that field
     */
    public void setString(int slot, String fldname, String val) {
-      tx.pin(blk);  // Pin the block at the beginning
+      int maxLength = layout.schema().length(fldname);
+      if (val.length() > maxLength) {
+         throw new IllegalArgumentException("String length exceeds defined schema length for field " + fldname);
+      }
+      tx.pin(blk); // Pin the block at the beginning
       int fldpos = offset(slot) + layout.offset(fldname);
       tx.setString(blk, fldpos, val, true);
-      tx.unpin(blk);  // Unpin the block at the end
+      tx.unpin(blk); // Unpin the block at the end
    }
-   
+
    public void delete(int slot) {
       tx.pin(blk);  // Pin the block at the beginning
       setFlag(slot, EMPTY);
