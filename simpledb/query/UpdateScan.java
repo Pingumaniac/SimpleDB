@@ -39,4 +39,8 @@ public interface UpdateScan extends Scan {
          throw new RuntimeException("Unsupported constant type for setting " + fldname);
       }
    }
+
+   public boolean previous();
+
+   public void afterLast();
 }

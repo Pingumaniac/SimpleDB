@@ -39,4 +39,8 @@ public interface Scan {
       }
       throw new RuntimeException("Unsupported field type for " + fldname);
    }
+
+   public boolean previous();
+
+   public void afterLast();
 }
