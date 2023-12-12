@@ -2,23 +2,10 @@ package simpledb.query;
 
 import simpledb.record.*;
 
-/**
- * The scan class corresponding to the <i>select</i> relational
- * algebra operator.
- * All methods except next delegate their work to the
- * underlying scan.
- * @author Edward Sciore
- */
 public class SelectScan implements UpdateScan {
 	private Scan s;
 	private Predicate pred;
 
-	/**
-	 * Create a select scan having the specified underlying
-	 * scan and predicate.
-	 * @param s the scan of the underlying query
-	 * @param pred the selection predicate
-	 */
 	public SelectScan(Scan s, Predicate pred) {
 		this.s = s;
 		this.pred = pred;
@@ -39,22 +26,31 @@ public class SelectScan implements UpdateScan {
 	}
 
 	public int getInt(String fldname) {
+		if (!hasField(fldname)) {
+			throw new IllegalArgumentException("Field " + fldname + " not found in SelectScan.");
+		}
 		return s.getInt(fldname);
 	}
 
 	public String getString(String fldname) {
+		if (!hasField(fldname)) {
+			throw new IllegalArgumentException("Field " + fldname + " not found in SelectScan.");
+		}
 		return s.getString(fldname);
 	}
 
-   public Constant getVal(String fldname) {
-      return s.getVal(fldname);
-   }
+	public Constant getVal(String fldname) {
+		if (!hasField(fldname)) {
+			throw new IllegalArgumentException("Field " + fldname + " not found in SelectScan.");
+		}
+		return s.getVal(fldname);
+	}
 
 	public boolean hasField(String fldname) {
 		return s.hasField(fldname);
 	}
 
-   public void close() {
+    public void close() {
       s.close();
    }
 

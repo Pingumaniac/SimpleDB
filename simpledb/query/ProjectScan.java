@@ -2,23 +2,10 @@ package simpledb.query;
 
 import java.util.List;
 
-/**
- * The scan class corresponding to the <i>project</i> relational
- * algebra operator.
- * All methods except hasField delegate their work to the
- * underlying scan.
- * @author Edward Sciore
- */
 public class ProjectScan implements Scan {
    private Scan s;
    private List<String> fieldlist;
-   
-   /**
-    * Create a project scan having the specified
-    * underlying scan and field list.
-    * @param s the underlying scan
-    * @param fieldlist the list of field names
-    */
+
    public ProjectScan(Scan s, List<String> fieldlist) {
       this.s = s;
       this.fieldlist = fieldlist;

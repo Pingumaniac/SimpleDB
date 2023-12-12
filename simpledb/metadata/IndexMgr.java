@@ -24,7 +24,7 @@ class IndexMgr {
       this.statmgr = statmgr;
       layout = tblmgr.getLayout("idxcat", tx);
    }
-   
+
    public void createIndex(String idxname, String tblname, String fldname, String indextype, Transaction tx) {
       TableScan fcat = new TableScan(tx, "fldcat", tblmgr.getLayout("fldcat", tx));
       while (fcat.next()) {
