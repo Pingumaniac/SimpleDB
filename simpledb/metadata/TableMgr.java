@@ -182,4 +182,65 @@ class TableMgr {
       createStmt.append(")");
       System.out.println(createStmt);
    }
+
+   public void updateTableStats(String tblname, Transaction tx) {
+      TableScan tcat = new TableScan(tx, "tblcat", tcatLayout);
+      while (tcat.next()) {
+         if (tcat.getString("tblname").equals(tblname)) {
+            int currentRowCount = tcat.getInt("rowcount");
+            tcat.setInt("rowcount", currentRowCount + 1);
+            break;
+         }
+      }
+      tcat.close();
+   }
+
+   public void updateFieldValueCount(String tblname, String fldname, Transaction tx) {
+      TableScan fcat = new TableScan(tx, "fldcat", fcatLayout);
+      while (fcat.next()) {
+         if (fcat.getString("tblname").equals(tblname) && fcat.getString("fldname").equals(fldname)) {
+            int currentCount = fcat.getInt("distinctcount");
+            fcat.setInt("distinctcount", currentCount + 1);
+            break;
+         }
+      }
+      fcat.close();
+   }
+
+   public void createTableWithRollbackHandling(String tblname, Schema sch, Transaction tx) {
+      boolean fileCreated = false;
+      tx.start();
+      try {
+         // Create the table data file
+         createTableDataFile(tblname, tx);
+         fileCreated = true;
+         // Insert table information into tblcat and fldcat
+         createTable(tblname, sch, tx);
+         tx.commit();
+      } catch (Exception e) {
+         tx.rollback();
+         if (fileCreated) {
+            deleteTableDataFile(tblname, tx); // Delete the data file on rollback
+         }
+         throw e;
+      }
+   }
+
+   private void createTableDataFile(String tblname, Transaction tx) {
+      String filename = tblname + ".tbl"; // Naming convention for table files
+      FileMgr fileMgr = tx.getFileMgr();
+      fileMgr.createFile(filename);
+   }
+
+   public void deleteFile(String filename) {
+      RandomAccessFile f = openFiles.remove(filename);
+      if (f != null) {
+         try {
+            f.close();
+            new File(dbDirectory, filename).delete();
+         } catch (IOException e) {
+            throw new RuntimeException("cannot delete file " + filename);
+         }
+      }
+   }
 }
