@@ -1,67 +1,70 @@
-package simpledb.query;
+import java.util.Date;
 
 public class Constant implements Comparable<Constant> {
-   private Integer ival = null;
-   private String  sval = null;
-   private Short shval = null;
-   private byte[] bval = null;
-   private Date dval = null;
+   private Object val;
+   private boolean isNull;
 
+   public Constant(Object val) {
+      this.val = val;
+      this.isNull = (val == null);
+   }
 
-   public Constant(Integer ival) {
-      this.ival = ival;
+   public boolean isNull() {
+      return isNull;
    }
-   
-   public Constant(String sval) {
-      this.sval = sval;
-   }
-   
+
    public int asInt() {
-      return ival;
+      if (isNull) throw new IllegalStateException("Cannot convert null to int");
+      return (Integer) val;
    }
-   
+
    public String asString() {
-      return sval;
-   }
-   
-   public boolean equals(Object obj) {
-      Constant c = (Constant) obj;
-      return (ival != null) ? ival.equals(c.ival) : sval.equals(c.sval);
-   }
-   
-   public int compareTo(Constant c) {
-      return (ival != null) ? ival.compareTo(c.ival) : sval.compareTo(c.sval);
-   }
-   
-   public int hashCode() {
-      return (ival != null) ? ival.hashCode() : sval.hashCode();
-   }
-   
-   public String toString() {
-      return (ival != null) ? ival.toString() : sval.toString();
-   }
-
-   public Constant(Short shval) {
-      this.shval = shval;
-   }
-
-   public Constant(byte[] bval) {
-      this.bval = bval;
-   }
-
-   public Constant(Date dval) {
-      this.dval = dval;
+      if (isNull) throw new IllegalStateException("Cannot convert null to String");
+      return (String) val;
    }
 
    public Short asShort() {
-      return shval;
+      if (isNull) throw new IllegalStateException("Cannot convert null to Short");
+      return (Short) val;
    }
 
    public byte[] asByteArray() {
-      return bval;
+      if (isNull) throw new IllegalStateException("Cannot convert null to byte array");
+      return (byte[]) val;
    }
 
    public Date asDate() {
-      return dval;
+      if (isNull) throw new IllegalStateException("Cannot convert null to Date");
+      return (Date) val;
+   }
+
+   @Override
+   public boolean equals(Object obj) {
+      if (this == obj) return true;
+      if (obj == null || getClass() != obj.getClass()) return false;
+      Constant constant = (Constant) obj;
+      if (isNull && constant.isNull) return true;
+      if (isNull || constant.isNull) return false;
+      return val.equals(constant.val);
+   }
+
+   @Override
+   public int compareTo(Constant c) {
+      if (isNull && c.isNull) return 0;
+      if (isNull || c.isNull) throw new IllegalStateException("Cannot compare null values");
+      if (val instanceof Comparable && c.val instanceof Comparable) {
+         return ((Comparable) val).compareTo(c.val);
+      }
+      throw new IllegalStateException("Incompatible types for comparison");
+   }
+
+   @Override
+   public int hashCode() {
+      return (isNull) ? 0 : val.hashCode();
+   }
+
+   @Override
+   public String toString() {
+      return (isNull) ? "null" : val.toString();
    }
 }

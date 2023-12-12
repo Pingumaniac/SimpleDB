@@ -21,6 +21,9 @@ public class Term {
    public boolean isSatisfied(Scan s) {
       Constant lhsval = lhs.evaluate(s);
       Constant rhsval = rhs.evaluate(s);
+      if (lhsval.isNull() || rhsval.isNull()) {
+         return false;
+      }
       switch (operator) {
          case "=": return lhsval.equals(rhsval);
          case "<": return lhsval.compareTo(rhsval) < 0;

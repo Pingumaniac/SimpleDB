@@ -48,11 +48,16 @@ public class TableScan implements UpdateScan {
    }
 
    public Constant getVal(String fldname) {
-      if (layout.schema().type(fldname) == INTEGER)
+      if (isNull(fldname)) {
+         return new Constant(null);
+      }
+      if (layout.schema().type(fldname) == INTEGER) {
          return new Constant(getInt(fldname));
-      else
+      } else {
          return new Constant(getString(fldname));
+      }
    }
+
 
    public boolean hasField(String fldname) {
       return layout.schema().hasField(fldname);
@@ -82,10 +87,13 @@ public class TableScan implements UpdateScan {
    }
 
    public void setVal(String fldname, Constant val) {
-      if (layout.schema().type(fldname) == INTEGER)
+      if (val.isNull()) {
+         setNull(fldname);
+      } else if (layout.schema().type(fldname) == INTEGER) {
          setInt(fldname, val.asInt());
-      else
+      } else {
          setString(fldname, val.asString());
+      }
    }
 
    public void insert() {
