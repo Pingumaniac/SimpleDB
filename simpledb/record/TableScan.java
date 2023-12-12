@@ -78,6 +78,14 @@ public class TableScan implements UpdateScan {
       rp.setString(currentslot, fldname, val);
    }
 
+   public void afterLast() {
+      rp.afterLast();
+   }
+
+   public boolean previous() {
+      return rp.previous();
+   }
+
    public void setVal(String fldname, Constant val) {
       if (layout.schema().type(fldname) == INTEGER)
          setInt(fldname, val.asInt());

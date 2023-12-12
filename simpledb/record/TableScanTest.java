@@ -50,5 +50,15 @@ public class TableScanTest {
       }
       ts.close();
       tx.commit();
+
+      // ex. 6.10
+      gs.afterLast();
+      while (s.previous()) {
+         int a = s.getInt("A");
+         String b = s.getString("B");
+         System.out.println("slot " + s.getRid() + ": {" + a + ", " + b + "}");
+      }
+      ts.close();
+      tx.commit();
    }
 }

@@ -18,7 +18,6 @@ public class RecordPage {
       this.tx = tx;
       this.blk = blk;
       this.layout = layout;
-      tx.pin(blk);
    }
 
    /**
@@ -28,8 +27,11 @@ public class RecordPage {
     * @return the integer stored in that field
     */
    public int getInt(int slot, String fldname) {
+      tx.pin(blk);  // Pin the block at the beginning
       int fldpos = offset(slot) + layout.offset(fldname);
-      return tx.getInt(blk, fldpos);
+      int intValue = tx.getInt(blk, fldpos);
+      tx.unpin(blk);  // Unpin the block at the end
+      return intValue
    }
 
    /**
@@ -39,8 +41,29 @@ public class RecordPage {
     * @return the string stored in that field
     */
    public String getString(int slot, String fldname) {
+      tx.pin(blk);  // Pin the block at the beginning
       int fldpos = offset(slot) + layout.offset(fldname);
-      return tx.getString(blk, fldpos);
+      String stringValue = tx.getString(blk, fldpos);
+      tx.unpin(blk);  // Unpin the block at the end
+      return stringValue;
+   }
+
+   public String getVarchar(int slot, String fldname) {
+      tx.pin(blk);  // Pin the block at the beginning
+      int fldpos = offset(slot) + layout.offset(fldname);
+      int length = tx.getInt(blk, fldpos); // Read the length of the VARCHAR
+      String stringValue =  tx.getString(blk, fldpos + Integer.BYTES, length);
+      tx.unpin(blk);  // Unpin the block at the end
+      return stringValue
+   }
+
+   public void setVarchar(int slot, String fldname, String val) {
+      tx.pin(blk);  // Pin the block at the beginning
+      int fldpos = offset(slot) + layout.offset(fldname);
+      int length = val.length();
+      tx.setInt(blk, fldpos, length); // Write the length of the VARCHAR
+      tx.setString(blk, fldpos + Integer.BYTES, val); // Write the actual string
+      tx.unpin(blk);  // Unpin the block at the end
    }
 
    /**
@@ -50,8 +73,10 @@ public class RecordPage {
     * @param val the integer value stored in that field
     */
    public void setInt(int slot, String fldname, int val) {
+      tx.pin(blk);  // Pin the block at the beginning
       int fldpos = offset(slot) + layout.offset(fldname);
       tx.setInt(blk, fldpos, val, true);
+      tx.unpin(blk);  // Unpin the block at the end
    }
 
    /**
@@ -61,12 +86,16 @@ public class RecordPage {
     * @param val the string value stored in that field
     */
    public void setString(int slot, String fldname, String val) {
+      tx.pin(blk);  // Pin the block at the beginning
       int fldpos = offset(slot) + layout.offset(fldname);
       tx.setString(blk, fldpos, val, true);
+      tx.unpin(blk);  // Unpin the block at the end
    }
    
    public void delete(int slot) {
+      tx.pin(blk);  // Pin the block at the beginning
       setFlag(slot, EMPTY);
+      tx.unpin(blk);  // Unpin the block at the end
    }
    
    /** Use the layout to format a new block of records.
@@ -74,6 +103,7 @@ public class RecordPage {
     *  (because the old values are meaningless).
     */ 
    public void format() {
+      tx.pin(blk);  // Pin the block at the beginning
       int slot = 0;
       while (isValidSlot(slot)) {
          tx.setInt(blk, offset(slot), EMPTY, false); 
@@ -87,16 +117,22 @@ public class RecordPage {
          }
          slot++;
       }
+      tx.unpin(blk);  // Unpin the block at the end
    }
 
    public int nextAfter(int slot) {
-      return searchAfter(slot, USED);
+      tx.pin(blk);  // Pin the block at the beginning
+      int intValue = searchAfter(slot, USED);
+      tx.unpin(blk);  // Unpin the block at the end
+      return intValue;
    }
  
    public int insertAfter(int slot) {
+      tx.pin(blk);  // Pin the block at the beginning
       int newslot = searchAfter(slot, EMPTY);
       if (newslot >= 0)
          setFlag(newslot, USED);
+      tx.unpin(blk);  // Unpin the block at the end
       return newslot;
    }
   
@@ -130,6 +166,22 @@ public class RecordPage {
    private int offset(int slot) {
       return slot * layout.slotSize();
    }
+
+   public void afterLast() {
+      currentslot = numSlots;
+   }
+
+   public boolean previous() {
+      currentslot--;
+      while (currentslot >= 0) {
+         if (tx.getInt(blk, offset(currentslot)) == USED) {
+            return true;
+         }
+         currentslot--;
+      }
+      return false;
+   }
+
 }
 
 
