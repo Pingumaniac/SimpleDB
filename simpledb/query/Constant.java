@@ -1,13 +1,13 @@
 package simpledb.query;
 
-/**
- * The class that denotes values stored in the database.
- * @author Edward Sciore
- */
 public class Constant implements Comparable<Constant> {
    private Integer ival = null;
    private String  sval = null;
-   
+   private Short shval = null;
+   private byte[] bval = null;
+   private Date dval = null;
+
+
    public Constant(Integer ival) {
       this.ival = ival;
    }
@@ -39,5 +39,29 @@ public class Constant implements Comparable<Constant> {
    
    public String toString() {
       return (ival != null) ? ival.toString() : sval.toString();
-   }   
+   }
+
+   public Constant(Short shval) {
+      this.shval = shval;
+   }
+
+   public Constant(byte[] bval) {
+      this.bval = bval;
+   }
+
+   public Constant(Date dval) {
+      this.dval = dval;
+   }
+
+   public Short asShort() {
+      return shval;
+   }
+
+   public byte[] asByteArray() {
+      return bval;
+   }
+
+   public Date asDate() {
+      return dval;
+   }
 }
