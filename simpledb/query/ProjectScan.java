@@ -1,6 +1,7 @@
 package simpledb.query;
 
 import java.util.List;
+import java.util.Date;
 import simpledb.record.RID;
 
 public class ProjectScan implements UpdateScan {
@@ -49,7 +50,7 @@ public class ProjectScan implements UpdateScan {
       s.close();
    }
 
-   // Implement the UpdateScan methods
+   // UpdateScan methods
    @Override
    public void setVal(String fldname, Constant val) {
       if (hasField(fldname)) {
@@ -124,7 +125,6 @@ public class ProjectScan implements UpdateScan {
       }
    }
 
-   // Implement the UpdateScan methods
    @Override
    public void previous() {
       if (!s.previous()) {
@@ -137,4 +137,3 @@ public class ProjectScan implements UpdateScan {
       s.afterLast();
    }
 }
-

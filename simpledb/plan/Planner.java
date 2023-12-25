@@ -17,27 +17,39 @@ public class Planner {
       Parser parser = new Parser(qry);
       QueryData data = parser.query();
       verifyQuery(data);
-      return qplanner.createPlan(data, tx);
+      Plan p = qplanner.createPlan(data, tx);
+      if (data.hasAggregate()) {
+         p = new AggregatePlan(p, data.getAggregateFunctions());
+      }
+      return p;
    }
+
 
    public int executeUpdate(String cmd, Transaction tx) {
       Parser parser = new Parser(cmd);
       Object data = parser.updateCmd();
       verifyUpdate(data);
-      if (data instanceof InsertData)
-         return uplanner.executeInsert((InsertData) data, tx);
-      else if (data instanceof DeleteData)
+
+      if (data instanceof InsertData) {
+         InsertData insertData = (InsertData) data;
+         if (insertData.isFromSelect()) {
+            return handleInsertFromSelect(insertData, tx);
+         } else {
+            return uplanner.executeInsert(insertData, tx);
+         }
+      } else if (data instanceof DeleteData) {
          return uplanner.executeDelete((DeleteData) data, tx);
-      else if (data instanceof ModifyData)
+      } else if (data instanceof ModifyData) {
          return uplanner.executeModify((ModifyData) data, tx);
-      else if (data instanceof CreateTableData)
+      } else if (data instanceof CreateTableData) {
          return uplanner.executeCreateTable((CreateTableData) data, tx);
-      else if (data instanceof CreateViewData)
+      } else if (data instanceof CreateViewData) {
          return uplanner.executeCreateView((CreateViewData) data, tx);
-      else if (data instanceof CreateIndexData)
+      } else if (data instanceof CreateIndexData) {
          return uplanner.executeCreateIndex((CreateIndexData) data, tx);
-      else
+      } else {
          return 0;
+      }
    }
 
    private void verifyQuery(QueryData data) {
@@ -74,6 +86,32 @@ public class Planner {
             throw new NonexistentTableException(modifyData.tableName());
          }
       }
+   }
+
+   private int handleInsertFromSelect(InsertData data, Transaction tx) {
+      String targetTable = data.tableName();
+      QueryData selectData = data.getSelectData();
+      // Create a plan for the select query
+      Plan selectPlan = qplanner.createPlan(selectData, tx);
+      // Open a scan for the select plan
+      Scan selectScan = selectPlan.open();
+
+      // Open an update scan for the target table
+      Plan targetTablePlan = new TablePlan(tx, targetTable, mdm); // mdm is an instance of MetadataMgr
+      UpdateScan targetScan = (UpdateScan) targetTablePlan.open();
+
+      int count = 0;
+      while (selectScan.next()) {
+         targetScan.insert();
+         for (String fldname : selectPlan.schema().fields()) {
+            targetScan.setVal(fldname, selectScan.getVal(fldname));
+         }
+         count++;
+      }
+
+      selectScan.close();
+      targetScan.close();
+      return count;
    }
 
    private boolean tableExists(String tableName) {

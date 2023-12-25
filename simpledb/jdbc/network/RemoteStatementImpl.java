@@ -7,10 +7,6 @@ import simpledb.tx.Transaction;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
 
-/**
- * The RMI server-side implementation of RemoteStatement.
- * @author Edward Sciore
- */
 @SuppressWarnings("serial")
 class RemoteStatementImpl extends UnicastRemoteObject implements RemoteStatement {
    private RemoteConnectionImpl rconn;
@@ -20,32 +16,22 @@ class RemoteStatementImpl extends UnicastRemoteObject implements RemoteStatement
       this.rconn = rconn;
       this.planner = planner;
    }
-   
-   /**
-    * Executes the specified SQL query string.
-    * The method calls the query planner to create a plan
-    * for the query. It then sends the plan to the
-    * RemoteResultSetImpl constructor for processing.
-    * @see simpledb.jdbc.network.RemoteStatement#executeQuery(java.lang.String)
-    */
+
    public RemoteResultSet executeQuery(String qry) throws RemoteException {
       try {
+         System.out.println("Executing query: " + qry);
+         System.out.println("Specific string from part (a)");
+
          Transaction tx = rconn.getTransaction();
          Plan pln = planner.createQueryPlan(qry, tx);
          return new RemoteResultSetImpl(pln, rconn);
       }
-      catch(RuntimeException e) {
+      catch (RuntimeException e) {
          rconn.rollback();
          throw e;
       }
    }
-   
-   /**
-    * Executes the specified SQL update command.
-    * The method sends the command to the update planner,
-    * which executes it.
-    * @see simpledb.jdbc.network.RemoteStatement#executeUpdate(java.lang.String)
-    */
+
    public int executeUpdate(String cmd) throws RemoteException {
       try {
          Transaction tx = rconn.getTransaction();
