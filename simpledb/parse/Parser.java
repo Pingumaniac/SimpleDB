@@ -1,7 +1,6 @@
 package simpledb.parse;
 
 import java.util.*;
-
 import simpledb.query.*;
 import simpledb.record.*;
 
@@ -12,13 +11,13 @@ public class Parser {
       lex = new Lexer(s);
    }
 
-   // Methods for parsing predicates, terms, expressions, constants, and fields
-
    public String field() {
       return lex.eatId();
    }
 
    public Constant constant() {
+      if (lex.matchKeyword("null"))
+         return new Constant(null);
       if (lex.matchStringConstant())
          return new Constant(lex.eatStringConstant());
       else
@@ -42,6 +41,11 @@ public class Parser {
 
    public Term term() {
       Expression lhs = expression();
+      if (lex.matchKeyword("is")) {
+         lex.eatKeyword("is");
+         lex.eatKeyword("null");
+         return new Term(lhs, Term.Op.IS_NULL, null);
+      }
       RelationalOp rop = relationalOp();
       Expression rhs = expression();
       return new Term(lhs, rop, rhs);
@@ -51,7 +55,7 @@ public class Parser {
       if (lex.matchDelim('=')) {
          lex.eatDelim('=');
          return RelationalOp.EQ;
-      } // Add other relational operators here
+      }
       throw new IllegalStateException("Syntax error in relational operation");
    }
 
@@ -71,8 +75,6 @@ public class Parser {
       return pred;
    }
 
-   // Methods for parsing queries
-
    public QueryData query() {
       lex.eatKeyword("select");
       List<String> fields = selectList();
@@ -83,8 +85,18 @@ public class Parser {
          lex.eatKeyword("where");
          pred = predicate();
       }
-      return new QueryData(fields, tables, pred);
+
+      QueryData firstQuery = new QueryData(fields, tables, pred);
+
+      if (lex.matchKeyword("union")) {
+         System.out.println("UNION operation is not currently supported.");
+         lex.eatKeyword("union");
+         query();
+      }
+
+      return firstQuery;
    }
+
 
    private List<String> selectList() {
       List<String> L = new ArrayList<String>();
@@ -102,6 +114,13 @@ public class Parser {
       Collection<String> L = new ArrayList<String>();
       do {
          L.add(lex.eatId());
+         if (lex.matchKeyword("join")) {
+            lex.eatKeyword("join");
+            String joinedTable = lex.eatId();
+            lex.eatKeyword("on");
+            Predicate joinCondition = predicate();
+            L.add(joinedTable);
+         }
          if (!lex.matchDelim(',')) {
             break;
          }
@@ -110,7 +129,6 @@ public class Parser {
       return L;
    }
 
-   // Methods for parsing the various update commands
 
    public Object updateCmd() {
       if (lex.matchKeyword("insert"))
@@ -123,8 +141,6 @@ public class Parser {
          return create();
    }
 
-   // Method for parsing delete commands
-
    public DeleteData delete() {
       lex.eatKeyword("delete");
       lex.eatKeyword("from");
@@ -136,8 +152,6 @@ public class Parser {
       }
       return new DeleteData(tblname, pred);
    }
-
-   // Methods for parsing insert commands
 
    public InsertData insert() {
       lex.eatKeyword("insert");
@@ -177,8 +191,6 @@ public class Parser {
       return L;
    }
 
-   // Method for parsing modify commands
-
    public ModifyData modify() {
       lex.eatKeyword("update");
       String tblname = lex.eatId();
@@ -193,8 +205,6 @@ public class Parser {
       }
       return new ModifyData(tblname, fldname, newval, pred);
    }
-
-   // Method for parsing create table commands
 
    public CreateTableData createTable() {
       lex.eatKeyword("table");
@@ -238,8 +248,6 @@ public class Parser {
       return schema;
    }
 
-   // Method for parsing create view commands
-
    public CreateViewData createView() {
       lex.eatKeyword("view");
       String viewname = lex.eatId();
@@ -247,8 +255,6 @@ public class Parser {
       QueryData qd = query();
       return new CreateViewData(viewname, qd);
    }
-
-   // Method for parsing create index commands
 
    public CreateIndexData createIndex() {
       lex.eatKeyword("index");
