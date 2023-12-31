@@ -5,25 +5,17 @@ import simpledb.tx.Transaction;
 import simpledb.plan.*;
 import simpledb.jdbc.StatementAdapter;
 
-/**
- * The embedded implementation of Statement.
- * @author Edward Sciore
- */
 class EmbeddedStatement extends StatementAdapter {
    private EmbeddedConnection conn;
    private Planner planner;
+   private List<EmbeddedResultSet> openResultSets;
    
    public EmbeddedStatement(EmbeddedConnection conn, Planner planner) {
       this.conn = conn;
       this.planner = planner;
+      openResultSets = new ArrayList<>();
    }
-   
-   /**
-    * Executes the specified SQL query string.
-    * Calls the query planner to create a plan for the query, 
-    * and sends the plan to the ResultSet constructor for processing.
-    * Rolls back and throws an SQLException if it cannot create the plan.
-    */
+
    public EmbeddedResultSet executeQuery(String qry) throws SQLException {
       try {
          Transaction tx = conn.getTransaction();
@@ -35,12 +27,7 @@ class EmbeddedStatement extends StatementAdapter {
          throw new SQLException(e);
       }
    }
-   
-   /**
-    * Executes the specified SQL update command by sending
-    * the command to the update planner and then committing.
-    * Rolls back and throws an SQLException on an error.
-    */
+
    public int executeUpdate(String cmd) throws SQLException {
       try {
          Transaction tx = conn.getTransaction();
@@ -53,7 +40,14 @@ class EmbeddedStatement extends StatementAdapter {
          throw new SQLException(e);
       }
    }
-   
+
+   @Override
    public void close() throws SQLException {
+      for (EmbeddedResultSet rs : openResultSets) {
+         if (rs != null) {
+            rs.close();
+         }
+      }
+      openResultSets.clear();
    }
 }

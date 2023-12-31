@@ -5,28 +5,18 @@ import java.sql.*;
 import java.util.Properties;
 import simpledb.jdbc.DriverAdapter;
 
-/**
- * The SimpleDB database driver.
- * @author Edward Sciore
- */
 public class NetworkDriver extends DriverAdapter {
-   
-   /**
-    * Connects to the SimpleDB server on the specified host.
-    * The method retrieves the RemoteDriver stub from
-    * the RMI registry on the specified host.
-    * It then calls the connect method on that stub,
-    * which in turn creates a new connection and
-    * returns the RemoteConnection stub for it.
-    * This stub is wrapped in a SimpleConnection object
-    * and is returned. 
-    * <P>
-    * The current implementation of this method ignores the 
-    * properties argument.
-    * @see java.sql.Driver#connect(java.lang.String, Properties)
-    */
    public Connection connect(String url, Properties prop) throws SQLException {
       try {
+         // Extract username and password from props
+         String username = props.getProperty("user");
+         String password = props.getProperty("password");
+
+         // Authenticate user
+         if (!authenticateUser(username, password)) {
+            throw new SQLException("User authentication failed.");
+         }
+
          String host = url.replace("jdbc:simpledb://", "");  //assumes no port specified
          Registry reg = LocateRegistry.getRegistry(host, 1099);
          RemoteDriver rdvr = (RemoteDriver) reg.lookup("simpledb");
@@ -37,4 +27,23 @@ public class NetworkDriver extends DriverAdapter {
          throw new SQLException(e);
       }
    }
+
+   private boolean authenticateUser(String username, String password) {
+      try {
+         Path path = Paths.get("path/to/credentials.txt");
+         List<String> lines = Files.readAllLines(path);
+
+         for (String line : lines) {
+            String[] credentials = line.split(":");
+            if (credentials[0].equals(username) && credentials[1].equals(password)) {
+               return true;
+            }
+         }
+         return false;
+      } catch (IOException e) {
+         e.printStackTrace();
+         return false;
+      }
+   }
+
 }

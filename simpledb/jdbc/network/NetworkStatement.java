@@ -3,12 +3,6 @@ package simpledb.jdbc.network;
 import java.sql.*;
 import simpledb.jdbc.StatementAdapter;
 
-/**
- * An adapter class that wraps RemoteStatement.
- * Its methods do nothing except transform RemoteExceptions
- * into SQLExceptions.
- * @author Edward Sciore
- */
 public class NetworkStatement extends StatementAdapter {
    private RemoteStatement rstmt;
 

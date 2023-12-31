@@ -11,10 +11,12 @@ import java.rmi.server.UnicastRemoteObject;
 class RemoteStatementImpl extends UnicastRemoteObject implements RemoteStatement {
    private RemoteConnectionImpl rconn;
    private Planner planner;
+   private List<RemoteResultSet> openResultSets;
    
    public RemoteStatementImpl(RemoteConnectionImpl rconn, Planner planner) throws RemoteException {
       this.rconn = rconn;
       this.planner = planner;
+      openResultSets = new ArrayList<>();
    }
 
    public RemoteResultSet executeQuery(String qry) throws RemoteException {
@@ -44,7 +46,14 @@ class RemoteStatementImpl extends UnicastRemoteObject implements RemoteStatement
          throw e;
       }
    }
-   
-   public void close() {
+
+   @Override
+   public void close() throws RemoteException {
+      for (RemoteResultSet rs : openResultSets) {
+         if (rs != null) {
+            rs.close();
+         }
+      }
+      openResultSets.clear();
    }
 }
