@@ -13,12 +13,22 @@ public class MultibufferProductPlan implements Plan {
 
    public MultibufferProductPlan(Transaction tx, Plan lhs, Plan rhs) {
       this.tx = tx;
-      this.lhs = new MaterializePlan(tx, lhs);
-      this.rhs = rhs;
+      // Ensure the smaller table is on the right side
+      if (lhs.recordsOutput() <= rhs.recordsOutput()) {
+         this.lhs = lhs;
+         this.rhs = rhs;
+      } else {
+         this.lhs = rhs;
+         this.rhs = lhs;
+      }
+      // Materialize only if necessary
+      this.lhs = materializeIfNecessary(this.lhs);
+      this.rhs = materializeIfNecessary(this.rhs);
       schema.addAll(lhs.schema());
       schema.addAll(rhs.schema());
    }
 
+   @Override
    public Scan open() {
       Scan leftscan = lhs.open();
       TempTable tt = copyRecordsFrom(rhs);
@@ -50,7 +60,7 @@ public class MultibufferProductPlan implements Plan {
    }
 
    private TempTable copyRecordsFrom(Plan p) {
-      Scan   src = p.open(); 
+      Scan src = p.open();
       Schema sch = p.schema();
       TempTable t = new TempTable(tx, sch);
       UpdateScan dest = (UpdateScan) t.open();
@@ -62,5 +72,12 @@ public class MultibufferProductPlan implements Plan {
       src.close();
       dest.close();
       return t;
+   }
+
+   private Plan materializeIfNecessary(Plan p) {
+      if (!(p instanceof MaterializePlan)) {
+         return new MaterializePlan(tx, p);
+      }
+      return p;
    }
 }

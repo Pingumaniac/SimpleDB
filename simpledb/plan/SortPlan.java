@@ -3,39 +3,115 @@ package simpledb.plan;
 import simpledb.query.*;
 import simpledb.record.Schema;
 import simpledb.tx.Transaction;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.*;
 
 public class SortPlan implements Plan {
     private Plan p;
     private Transaction tx;
     private Schema sch;
     private RecordComparator comp;
-    private String sortfield; // Assuming a single sort field for simplicity
-    private Index idx; // B-tree index
+    private String sortfield;
+    private int runSize; // Size of each run in blocks
 
-    public SortPlan(Plan p, String sortfield, Transaction tx) {
+    public SortPlan(Plan p, String sortfield, Transaction tx, int runSize) {
         this.p = p;
         this.tx = tx;
         this.sch = p.schema();
         this.sortfield = sortfield;
         this.comp = new RecordComparator(List.of(sortfield));
-
-        // Create a B-tree index on the sort field
-        this.idx = new BTreeIndex(tx, "tempindex", sch, sortfield);
+        this.runSize = runSize; // Initialize run size
     }
 
     @Override
     public Scan open() {
         Scan src = p.open();
-        while (src.next()) {
-            // Insert each record into the B-tree index
-            idx.insert(src.getVal(sortfield), src.getRid());
+        if (!src.next()) {
+            src.close();
+            return new EmptyScan();
         }
+        src.beforeFirst();
+        List<TempTable> runs = splitIntoRuns(src, runSize);
         src.close();
+        int k = calculateK(runs.size());
 
-        // Open a B-tree traversal scan
-        return new IndexScan(sch, idx, new TableScan(p, tx));
+        while (runs.size() > 1)
+            runs = doAMergeIteration(runs, k);
+
+        return new SortScan(runs, comp);
+    }
+
+    private List<TempTable> splitIntoRuns(Scan src, int runSize) {
+        List<TempTable> temps = new ArrayList<>();
+        src.beforeFirst();
+        while (src.next()) {
+            TempTable currenttemp = new TempTable(tx, sch);
+            temps.add(currenttemp);
+            UpdateScan currentscan = currenttemp.open();
+
+            int blockSize = 0;
+            do {
+                copy(src, currentscan);
+                blockSize++;
+            } while (blockSize < runSize && src.next());
+
+            currentscan.close();
+        }
+        return temps;
+    }
+
+    private List<TempTable> doAMergeIteration(List<TempTable> runs, int k) {
+        List<TempTable> result = new ArrayList<>();
+        while (runs.size() > 1) {
+            List<TempTable> tomerge = new ArrayList<>();
+            for (int i = 0; i < k && !runs.isEmpty(); i++)
+                tomerge.add(runs.remove(0));
+            result.add(mergeRuns(tomerge));
+        }
+        if (!runs.isEmpty())
+            result.add(runs.get(0));
+        return result;
+    }
+
+    private TempTable mergeRuns(List<TempTable> tomerge) {
+        List<Scan> scns = new ArrayList<>();
+        for (TempTable tt : tomerge)
+            scns.add(tt.open());
+
+        TempTable result = new TempTable(tx, sch);
+        UpdateScan dest = result.open();
+        PriorityQueue<Record> pq = new PriorityQueue<>(comp);
+        for (Scan s : scns) {
+            if (s.next()) {
+                pq.add(new Record(s, s.getRid()));
+            }
+        }
+
+        try {
+            while (!pq.isEmpty()) {
+                Record smallest = pq.poll();
+                copy(smallest.s, dest);
+                if (smallest.s.next())
+                    pq.add(new Record(smallest.s, smallest.s.getRid()));
+            }
+        } finally {
+            for (Scan s : scns)
+                s.close();
+            dest.close();
+        }
+        return result;
+    }
+
+    private boolean copy(Scan src, UpdateScan dest) {
+        dest.insert();
+        for (String fldname : sch.fields())
+            dest.setVal(fldname, src.getVal(fldname));
+        return src.next();
+    }
+
+    private int calculateK(int numRuns) {
+        // Assuming k is limited by the number of available buffers
+        int availableBuffers = tx.availableBuffers();
+        return Math.min(numRuns, availableBuffers);
     }
 
     @Override
@@ -50,6 +126,16 @@ public class SortPlan implements Plan {
     @Override
     public int recordsOutput() {
         return p.recordsOutput();
+    }
+
+    @Override
+    public boolean isSorted() {
+        return true;
+    }
+
+    @Override
+    public List<String> getSortedFields() {
+        return sortfields;
     }
 
     @Override
@@ -131,17 +217,6 @@ public class SortPlan implements Plan {
         return src.next();
     }
 
-    @Override
-    public boolean isSorted() {
-        return true;
-    }
-
-    @Override
-    public List<String> getSortedFields() {
-        return sortfields;
-    }
-
-
     private class Record implements Comparable<Record> {
         Scan s;
         RID rid;
@@ -155,15 +230,5 @@ public class SortPlan implements Plan {
         public int compareTo(Record r) {
             return comp.compare(s, r.s);
         }
-    }
-
-    @Override
-    public boolean isSorted() {
-        return true;
-    }
-
-    @Override
-    public List<String> getSortedFields() {
-        return List.of(sortfield);
     }
 }
