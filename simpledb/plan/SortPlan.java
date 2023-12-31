@@ -11,39 +11,40 @@ public class SortPlan implements Plan {
     private Transaction tx;
     private Schema sch;
     private RecordComparator comp;
-    private int k; // for k-way merge
+    private String sortfield; // Assuming a single sort field for simplicity
+    private Index idx; // B-tree index
 
-    public SortPlan(Plan p, List<String> sortfields, Transaction tx, int k) {
+    public SortPlan(Plan p, String sortfield, Transaction tx) {
         this.p = p;
         this.tx = tx;
         this.sch = p.schema();
-        this.comp = new RecordComparator(sortfields);
-        this.k = k;
+        this.sortfield = sortfield;
+        this.comp = new RecordComparator(List.of(sortfield));
+
+        // Create a B-tree index on the sort field
+        this.idx = new BTreeIndex(tx, "tempindex", sch, sortfield);
     }
 
     @Override
     public Scan open() {
         Scan src = p.open();
-        if (!src.next()) {
-            src.close();
-            return new EmptyScan(); // Handle empty table case
+        while (src.next()) {
+            // Insert each record into the B-tree index
+            idx.insert(src.getVal(sortfield), src.getRid());
         }
-        src.beforeFirst();
-
-        List<TempTable> runs = splitIntoRuns(src);
         src.close();
 
-        while (runs.size() > 1)
-            runs = doAMergeIteration(runs);
-
-        return new SortScan(runs, comp);
+        // Open a B-tree traversal scan
+        return new IndexScan(sch, idx, new TableScan(p, tx));
     }
 
     @Override
     public int blocksAccessed() {
-        // This does not include the one-time cost of sorting
-        Plan mp = new MaterializePlan(tx, p);
-        return mp.blocksAccessed();
+        // Rough estimation of block accesses
+        // Actual implementation would require detailed knowledge of the B-tree structure
+        int height = idx.height();
+        int leafNodes = idx.leafNodeCount();
+        return height + leafNodes; // Height for traversing to leaf + leaf node accesses
     }
 
     @Override
@@ -154,5 +155,15 @@ public class SortPlan implements Plan {
         public int compareTo(Record r) {
             return comp.compare(s, r.s);
         }
+    }
+
+    @Override
+    public boolean isSorted() {
+        return true;
+    }
+
+    @Override
+    public List<String> getSortedFields() {
+        return List.of(sortfield);
     }
 }

@@ -77,56 +77,63 @@ public class Parser {
 
    public QueryData query() {
       lex.eatKeyword("select");
+
+      boolean distinct = false;
+      if (lex.matchKeyword("distinct")) {
+         lex.eatKeyword("distinct");
+         distinct = true;
+      }
+
       List<String> fields = selectList();
       lex.eatKeyword("from");
       Collection<String> tables = tableList();
       Predicate pred = new Predicate();
+
       if (lex.matchKeyword("where")) {
          lex.eatKeyword("where");
          pred = predicate();
       }
 
-      QueryData firstQuery = new QueryData(fields, tables, pred);
-
-      if (lex.matchKeyword("union")) {
-         System.out.println("UNION operation is not currently supported.");
-         lex.eatKeyword("union");
-         query();
+      List<String> groupFields = null;
+      if (lex.matchKeyword("group")) {
+         lex.eatKeyword("group");
+         lex.eatKeyword("by");
+         groupFields = selectList(); // Reuse selectList method to parse group by fields
       }
 
-      return firstQuery;
+      return new QueryData(distinct, fields, tables, pred, groupFields);
    }
 
-
+   // Method to parse select list
    private List<String> selectList() {
-      List<String> L = new ArrayList<String>();
-      do {
-         L.add(field());
-         if (!lex.matchDelim(',')) {
-            break;
-         }
+      List<String> L = new ArrayList<>();
+      L.add(field());
+      while (lex.matchDelim(',')) {
          lex.eatDelim(',');
-      } while (true);
+         L.add(field());
+      }
       return L;
    }
 
+   // Method to parse table list
    private Collection<String> tableList() {
-      Collection<String> L = new ArrayList<String>();
-      do {
-         L.add(lex.eatId());
-         if (lex.matchKeyword("join")) {
-            lex.eatKeyword("join");
-            String joinedTable = lex.eatId();
-            lex.eatKeyword("on");
-            Predicate joinCondition = predicate();
-            L.add(joinedTable);
-         }
-         if (!lex.matchDelim(',')) {
-            break;
-         }
+      Collection<String> L = new ArrayList<>();
+      L.add(lex.eatId());
+      while (lex.matchDelim(',')) {
          lex.eatDelim(',');
-      } while (true);
+         L.add(lex.eatId());
+      }
       return L;
+   }
+
+   // Method to parse predicates (WHERE clause)
+   private Predicate predicate() {
+      Predicate pred = new Predicate(term());
+      while (lex.matchKeyword("and")) {
+         lex.eatKeyword("and");
+         pred.conjoinWith(term());
+      }
+      return pred;
    }
 
 
