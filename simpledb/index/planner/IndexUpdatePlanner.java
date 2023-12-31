@@ -126,9 +126,29 @@ public class IndexUpdatePlanner implements UpdatePlanner {
       mdm.createView(data.viewName(), data.viewDef(), tx);
       return 0;
    }
-   
+
    public int executeCreateIndex(CreateIndexData data, Transaction tx) {
-      mdm.createIndex(data.indexName(), data.tableName(), data.fieldName(), tx);
+      String idxName = data.indexName();
+      String tblName = data.tableName();
+      String fldName = data.fieldName();
+
+      // Create the index
+      mdm.createIndex(idxName, tblName, fldName, tx);
+
+      // Open a scan on the table to populate the index
+      Plan p = new TablePlan(tx, tblName, mdm);
+      UpdateScan us = (UpdateScan) p.open();
+      Index idx = mdm.getIndexInfo(tblName, tx).get(fldName).open(tx);
+
+      // Populate the index with existing records
+      while (us.next()) {
+         RID rid = us.getRid();
+         Constant val = us.getVal(fldName);
+         idx.insert(val, rid);
+      }
+      idx.close();
+      us.close();
       return 0;
    }
+
 }

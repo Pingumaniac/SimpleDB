@@ -12,6 +12,7 @@ public class HashIndex implements Index {
 	private Layout layout;
 	private Constant searchkey = null;
 	private TableScan ts = null;
+	private int currentBucket = -1;
 
 	public HashIndex(Transaction tx, String idxname, Layout layout) {
 		this.tx = tx;
@@ -22,16 +23,32 @@ public class HashIndex implements Index {
 	public void beforeFirst(Constant searchkey) {
 		close();
 		this.searchkey = searchkey;
-		int bucket = searchkey.hashCode() % NUM_BUCKETS;
+		this.currentBucket = searchkey.hashCode() % NUM_BUCKETS;
+		openBucket(currentBucket);
+	}
+
+	private void openBucket(int bucket) {
 		String tblname = idxname + bucket;
 		ts = new TableScan(tx, tblname, layout);
+		// Move to the first record in the chain
+		ts.beforeFirst();
+		ts.next();
 	}
 
 	public boolean next() {
-		while (ts.next())
+		while (true) {
 			if (ts.getVal("dataval").equals(searchkey))
 				return true;
-		return false;
+			if (!ts.next()) {
+				// Reached end of the current bucket chain
+				int nextblk = ts.getInt("block");
+				if (nextblk == -1) {
+					return false; // End of chain
+				}
+				ts.close();
+				openBucket(nextblk); // Open next block in the chain
+			}
+		}
 	}
 
 	public RID getDataRid() {

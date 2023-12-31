@@ -137,8 +137,17 @@ public class Parser {
          return delete();
       else if (lex.matchKeyword("update"))
          return modify();
+      else if (lex.matchKeyword("drop"))
+         return dropIndex();
       else
          return create();
+   }
+
+   public DropIndexData dropIndex() {
+      lex.eatKeyword("drop");
+      lex.eatKeyword("index");
+      String idxName = lex.eatId();
+      return new DropIndexData(idxName);
    }
 
    public DeleteData delete() {
@@ -210,10 +219,27 @@ public class Parser {
       lex.eatKeyword("table");
       String tblname = lex.eatId();
       lex.eatDelim('(');
-      Schema sch = fieldDefs();
+      Schema sch = new Schema();
+      List<String> indexFields = new ArrayList<>();
+      do {
+         if (lex.matchKeyword("index")) {
+            lex.eatKeyword("index");
+            lex.eatDelim('(');
+            indexFields.add(field());
+            lex.eatDelim(')');
+         } else {
+            Schema schema2 = fieldDef();
+            sch.addAll(schema2);
+         }
+         if (!lex.matchDelim(',')) {
+            break;
+         }
+         lex.eatDelim(',');
+      } while (true);
       lex.eatDelim(')');
-      return new CreateTableData(tblname, sch);
+      return new CreateTableData(tblname, sch, indexFields);
    }
+
 
    private Schema fieldDefs() {
       Schema schema = new Schema();
@@ -264,6 +290,12 @@ public class Parser {
       lex.eatDelim('(');
       String fldname = field();
       lex.eatDelim(')');
-      return new CreateIndexData(idxname, tblname, fldname);
+      String idxType = "hash"; // Default index type
+      if (lex.matchKeyword("using")) {
+         lex.eatKeyword("using");
+         idxType = lex.eatId();
+      }
+      return new CreateIndexData(idxname, tblname, fldname, idxType);
    }
+
 }

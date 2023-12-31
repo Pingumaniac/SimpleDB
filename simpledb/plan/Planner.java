@@ -47,9 +47,25 @@ public class Planner {
          return uplanner.executeCreateView((CreateViewData) data, tx);
       } else if (data instanceof CreateIndexData) {
          return uplanner.executeCreateIndex((CreateIndexData) data, tx);
+      } else if (data instanceof DropIndexData) {
+         return uplanner.executeDropIndex((DropIndexData) data, tx);
       } else {
          return 0;
       }
+   }
+
+   public int executeCreateTable(CreateTableData data, Transaction tx) {
+      mdm.createTable(data.tableName(), data.newSchema(), tx);
+      for (String idxField : data.indexFields()) {
+         String idxName = data.tableName() + idxField;
+         mdm.createIndex(idxName, data.tableName(), idxField, tx);
+      }
+      return 0;
+   }
+
+   public int executeDropIndex(DropIndexData data, Transaction tx) {
+      mdm.dropIndex(data.indexName(), tx);
+      return 0;
    }
 
    private void verifyQuery(QueryData data) {
