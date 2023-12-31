@@ -33,6 +33,10 @@ public class Transaction {
    private static volatile boolean isCheckpointing = false;
    private static final String TXNUM_STORAGE_FILE = "txnum.dat";
 
+   private FileMgr fileMgr;
+   private List<String> tempFilesCreated;
+
+
    public Transaction(FileMgr fm, LogMgr lm, BufferMgr bm) {
       this.fm = fm;
       this.bm = bm;
@@ -42,6 +46,9 @@ public class Transaction {
       this.mybuffers = new BufferList(bm);
       this.active = true;
       this.newlyAppendedBlocks = new ArrayList<>();
+
+      this.fileMgr = fileMgr;
+      this.tempFilesCreated = new ArrayList<>();
 
       synchronized (checkpointLock) {
          while (isCheckpointing) {
@@ -61,6 +68,12 @@ public class Transaction {
       mybuffers.unpinAll();
       active = false;
       activeTransactions.remove(this);
+
+      // Delete temporary files created in this transaction
+      for (String tempFileName : tempFilesCreated) {
+         fileMgr.deleteFile(tempFileName);
+      }
+      tempFilesCreated.clear();
    }
 
    public void rollback() {
@@ -74,7 +87,18 @@ public class Transaction {
       active = false;
       newlyAppendedBlocks.clear();
       activeTransactions.remove(this);
+
+      // Delete temporary files created in this transaction
+      for (String tempFileName : tempFilesCreated) {
+         fileMgr.deleteFile(tempFileName);
+      }
+      tempFilesCreated.clear();
    }
+
+   public void addTempFile(String tempFileName) {
+      tempFilesCreated.add(tempFileName);
+   }
+
 
    public void recover() {
       bm.flushAll(txnum);

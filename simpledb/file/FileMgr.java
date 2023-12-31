@@ -102,4 +102,11 @@ public class FileMgr {
    public long getBlocksWritten() {
       return blocksWritten;
    }
+
+   public void deleteFile(String filename) {
+      File f = new File(dbDirectory, filename);
+      if (f.exists()) {
+         f.delete();
+      }
+   }
 }

@@ -14,4 +14,6 @@ public interface Plan {
    public int    distinctValues(String fldname);
 
    public Schema schema();
+
+   public int preprocessingCost();
 }
