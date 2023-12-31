@@ -16,4 +16,7 @@ public interface Plan {
    public Schema schema();
 
    public int preprocessingCost();
+
+   public boolean isSorted();
+   public List<String> getSortedFields();
 }

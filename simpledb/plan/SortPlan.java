@@ -130,6 +130,17 @@ public class SortPlan implements Plan {
         return src.next();
     }
 
+    @Override
+    public boolean isSorted() {
+        return true;
+    }
+
+    @Override
+    public List<String> getSortedFields() {
+        return sortfields;
+    }
+
+
     private class Record implements Comparable<Record> {
         Scan s;
         RID rid;
