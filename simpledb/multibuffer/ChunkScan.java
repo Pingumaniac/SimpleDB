@@ -7,10 +7,6 @@ import simpledb.query.*;
 import simpledb.tx.Transaction;
 import simpledb.record.*;
 
-/**
- * The class for the <i>chunk</i> operator.
- * @author Edward Sciore
- */
 public class ChunkScan implements Scan {
    private List<RecordPage> buffs = new ArrayList<>();
    private Transaction tx;
@@ -20,13 +16,6 @@ public class ChunkScan implements Scan {
    private RecordPage rp;
    private int currentslot;
 
-   /**
-    * Create a chunk consisting of the specified pages. 
-    * @param layout the metadata for the chunked table
-    * @param startbnum the starting block number
-    * @param endbnum  the ending block number
-    * @param tx the current transaction
-    */ 
    public ChunkScan(Transaction tx, String filename, Layout layout, int startbnum, int endbnum) {
       this.tx = tx;
       this.filename = filename;
@@ -40,9 +29,6 @@ public class ChunkScan implements Scan {
       moveToBlock(startbnum);
    }
 
-   /**
-    * @see simpledb.query.Scan#close()
-    */
    public void close() {
       for (int i=0; i<buffs.size(); i++) {
          BlockId blk = new BlockId(filename, startbnum+i);
@@ -50,20 +36,10 @@ public class ChunkScan implements Scan {
       }
    }
 
-   /**
-    * @see simpledb.query.Scan#beforeFirst()
-    */
    public void beforeFirst() {
       moveToBlock(startbnum);
    }
 
-   /**
-    * Moves to the next record in the current block of the chunk.
-    * If there are no more records, then make
-    * the next block be current.
-    * If there are no more blocks in the chunk, return false.
-    * @see simpledb.query.Scan#next()  
-    */
    public boolean next() {
       currentslot = rp.nextAfter(currentslot);
       while (currentslot < 0) {
@@ -75,23 +51,14 @@ public class ChunkScan implements Scan {
       return true;
    }
 
-   /**
-    * @see simpledb.query.Scan#getInt(java.lang.String)
-    */
    public int getInt(String fldname) {
       return rp.getInt(currentslot, fldname);
    }
 
-   /**
-    * @see simpledb.query.Scan#getString(java.lang.String)
-    */
    public String getString(String fldname) {
       return rp.getString(currentslot, fldname);
    }
 
-   /**
-    * @see simpledb.query.Scan#getVal(java.lang.String)
-    */
    public Constant getVal(String fldname) {
       if (layout.schema().type(fldname) == INTEGER)
          return new Constant(getInt(fldname));
@@ -99,9 +66,6 @@ public class ChunkScan implements Scan {
          return new Constant(getString(fldname));
    }
 
-  /**
-    * @see simpledb.query.Scan#hasField(java.lang.String)
-    */
    public boolean hasField(String fldname) {
       return layout.schema().hasField(fldname);
    }

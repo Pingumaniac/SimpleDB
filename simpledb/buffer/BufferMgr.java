@@ -13,18 +13,126 @@ public class BufferMgr {
    private Deque<Buffer> lruQueue; // For LRU strategy
    private FileMgr fm; // File manager for file operations
 
-   public BufferMgr(FileMgr fm, LogMgr lm, int numbuffs) {
-      this.fm = fm; // Initialize FileMgr
-      bufferpool = new Buffer[numbuffs];
-      numAvailable = numbuffs;
-      bufferPoolMap = new HashMap<>();
-      lruQueue = new ArrayDeque<>();
+   // New attribute for buffer reservation
+   private Map<TransactionId, Set<Buffer>> reservedBuffers;
 
-      for (int i = 0; i < numbuffs; i++) {
-         bufferpool[i] = new Buffer(fm, lm);
-         lruQueue.addLast(bufferpool[i]);
+   public BufferMgr(FileMgr fm, LogMgr lm, int numbuffs) {
+      this.fm = fm;
+      this.bufferpool = new Buffer[numbuffs];
+      this.numAvailable = numbuffs;
+      this.bufferPoolMap = new HashMap<>();
+      this.lruQueue = new ArrayDeque<>();
+      this.reservedBuffers = new HashMap<>();
+
+      // Initialize buffer pool
+      for (int i = 0; i < numbuffs; i++)
+         bufferpool[i] = new Buffer();
+   }
+
+   // Method to reserve buffers for a transaction
+   public synchronized void reserveBuffers(TransactionId txId, int numBuffers) {
+      if (numBuffers > numAvailable) {
+         throw new BufferAbortException();
+      }
+      Set<Buffer> reservedSet = new HashSet<>();
+      for (int i = 0; i < numBuffers; i++) {
+         Buffer buff = chooseUnpinnedBuffer();
+         if (buff == null) {
+            releaseBuffers(txId);
+            throw new BufferAbortException();
+         }
+         buff.pin();
+         reservedSet.add(buff);
+         numAvailable--;
+      }
+      reservedBuffers.put(txId, reservedSet);
+   }
+
+   // Method to release buffers reserved by a transaction
+   public synchronized void releaseBuffers(TransactionId txId) {
+      Set<Buffer> buffers = reservedBuffers.get(txId);
+      if (buffers != null) {
+         for (Buffer buff : buffers) {
+            buff.unpin();
+            numAvailable++;
+         }
+         reservedBuffers.remove(txId);
       }
    }
+
+   // Modified pin method
+   public synchronized void pin(BlockId blk, TransactionId txId) {
+      Buffer buff = findExistingBuffer(blk);
+      if (buff == null) {
+         buff = chooseUnpinnedBuffer();
+         if (buff == null) {
+            if (!reservedBuffers.containsKey(txId) || reservedBuffers.get(txId).isEmpty()) {
+               throw new BufferAbortException();
+            }
+            // Use a reserved buffer
+            buff = reservedBuffers.get(txId).iterator().next();
+            reservedBuffers.get(txId).remove(buff);
+            buff.assignToBlock(blk);
+         } else {
+            buff.assignToBlock(blk);
+            bufferPoolMap.put(blk, buff);
+         }
+      }
+      buff.pin();
+   }
+
+   // Modified unpin method
+   public synchronized void unpin(Buffer buff) {
+      buff.unpin();
+      if (!buff.isPinned())
+         numAvailable++;
+   }
+
+   private Buffer findExistingBuffer(BlockId blk) {
+      return bufferPoolMap.get(blk);
+   }
+
+   private Buffer chooseUnpinnedBuffer() {
+      for (Buffer buff : bufferpool) {
+         if (!buff.isPinned()) {
+            lruQueue.remove(buff); // Remove from LRU queue if it's there
+            lruQueue.addLast(buff); // Add to the end of the LRU queue
+            return buff;
+         }
+      }
+      return null; // No unpinned buffers available
+   }
+
+   public synchronized void releaseTransactionBuffers(TransactionId txId) {
+      // Check if the transaction has reserved any buffers
+      Set<Buffer> transactionBuffers = reservedBuffers.get(txId);
+      if (transactionBuffers != null) {
+         // Iterate over each buffer reserved by the transaction
+         for (Buffer buff : transactionBuffers) {
+            // Unpin the buffer if it is currently pinned
+            while (buff.isPinned()) {
+               buff.unpin();
+            }
+            // Remove the buffer from the reserved set
+            numAvailable++;
+            lruQueue.remove(buff);
+         }
+         // Remove the transaction's entry from the reservedBuffers map
+         reservedBuffers.remove(txId);
+      }
+
+      // Also go through all buffers in the pool to unpin any buffers pinned by this transaction
+      for (Buffer buffer : bufferpool) {
+         if (buffer.pinningTx() == txId) {
+            while (buffer.isPinned()) {
+               buffer.unpin();
+            }
+            numAvailable++;
+            lruQueue.remove(buffer);
+         }
+      }
+   }
+
 
    public synchronized int available() {
       return numAvailable;
@@ -35,33 +143,6 @@ public class BufferMgr {
          if (buff.modifyingTx() == txnum) {
             buff.flush();
          }
-      }
-   }
-
-   public synchronized void unpin(Buffer buff) {
-      buff.unpin();
-      if (!buff.isPinned()) {
-         numAvailable++;
-         lruQueue.remove(buff);
-         lruQueue.addLast(buff);
-         notifyAll();
-      }
-   }
-
-   public synchronized Buffer pin(BlockId blk) {
-      try {
-         long timestamp = System.currentTimeMillis();
-         Buffer buff = tryToPin(blk);
-         while (buff == null && !waitingTooLong(timestamp)) {
-            wait(MAX_TIME);
-            buff = tryToPin(blk);
-         }
-         if (buff == null) {
-            throw new BufferAbortException();
-         }
-         return buff;
-      } catch (InterruptedException e) {
-         throw new BufferAbortException();
       }
    }
 
