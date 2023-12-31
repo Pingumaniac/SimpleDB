@@ -9,12 +9,6 @@ import simpledb.parse.*;
 import simpledb.plan.*;
 import simpledb.index.Index;
 
-/**
- * A modification of the basic update planner.
- * It dispatches each update statement to the corresponding
- * index planner.
- * @author Edward Sciore
- */
 public class IndexUpdatePlanner implements UpdatePlanner {
    private MetadataMgr mdm;
    
@@ -53,7 +47,16 @@ public class IndexUpdatePlanner implements UpdatePlanner {
       String tblname = data.tableName();
       Plan p = new TablePlan(tx, tblname, mdm);
       p = new SelectPlan(p, data.pred());
+
+      // Check for an appropriate index for the predicate
       Map<String,IndexInfo> indexes = mdm.getIndexInfo(tblname, tx);
+      for (String fldname : indexes.keySet()) {
+         if (data.pred().equatesWithField(fldname) != null) {
+            IndexInfo ii = indexes.get(fldname);
+            p = new IndexSelectPlan(p, ii, data.pred().equatesWithConstant(fldname), tx);
+            break;
+         }
+      }
       
       UpdateScan s = (UpdateScan) p.open();
       int count = 0;
@@ -73,33 +76,43 @@ public class IndexUpdatePlanner implements UpdatePlanner {
       s.close();
       return count;
    }
-   
+
    public int executeModify(ModifyData data, Transaction tx) {
       String tblname = data.tableName();
       String fldname = data.targetField();
       Plan p = new TablePlan(tx, tblname, mdm);
-      p = new SelectPlan(p, data.pred());
-      
-      IndexInfo ii = mdm.getIndexInfo(tblname, tx).get(fldname);
-      Index idx = (ii == null) ? null : ii.open();
-      
+      Predicate pred = data.pred();
+
+      // Check for an appropriate index for the modification field
+      Map<String, IndexInfo> indexes = mdm.getIndexInfo(tblname, tx);
+      IndexInfo ii = indexes.get(fldname);
+
+      // Use IndexSelectPlan if there's an index on the target field and the predicate allows
+      if (ii != null && pred.equatesWithField(fldname) != null) {
+         Constant val = pred.equatesWithConstant(fldname);
+         p = new IndexSelectPlan(p, ii, val, tx);
+      } else {
+         p = new SelectPlan(p, pred);
+      }
+
       UpdateScan s = (UpdateScan) p.open();
       int count = 0;
-      while(s.next()) {
+      while (s.next()) {
          // first, update the record
          Constant newval = data.newValue().evaluate(s);
-         Constant oldval = s.getVal(fldname);
-         s.setVal(data.targetField(), newval);
-         
+         s.setVal(fldname, newval);
+
          // then update the appropriate index, if it exists
-         if (idx != null) {
+         if (ii != null) {
             RID rid = s.getRid();
+            Constant oldval = s.getVal(fldname);
+            Index idx = ii.open();
             idx.delete(oldval, rid);
             idx.insert(newval, rid);
+            idx.close();
          }
          count++;
       }
-      if (idx != null) idx.close();
       s.close();
       return count;
    }
